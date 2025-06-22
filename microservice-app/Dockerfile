@@ -3,6 +3,9 @@
 # Use minimal Node.js Alpine image
 FROM node:20-alpine
 
+# Security fix: Explicitly upgrade npm to secure version
+RUN npm install -g npm@11.3.0
+
 # Create non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
