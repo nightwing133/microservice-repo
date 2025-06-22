@@ -54,7 +54,7 @@ jobs:
     - name: Build Docker Image
       working-directory: ./microservice-app
       run: |
-        docker build -t ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }} .
+        docker build -t ${{ steps.login-ecr.outputs.registry }}/microservice:${{ github.sha }} .
 
     # 9. Scan Docker image (Snyk)
     - name: Snyk Docker Image Scan
@@ -62,13 +62,13 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        image: "${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }}"
+        image: "${{ steps.login-ecr.outputs.registry }}/microservice:${{ github.sha }}"
         args: --severity-threshold=high
 
     # 10. Push Image to ECR
     - name: Push Docker Image to ECR
       run: |
-        docker push ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }}
+        docker push ${{ steps.login-ecr.outputs.registry }}/microservice:${{ github.sha }}
 
     # 13. Update EC2 Instance with New Docker Image
     - name: Update EC2 to use Latest Docker Image
@@ -81,6 +81,6 @@ jobs:
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }};
             docker stop microservice || true;
             docker rm microservice || true;
-            docker pull ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }};
-            docker run -d --name microservice -p 3000:3000 ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }};
+            docker pull ${{ steps.login-ecr.outputs.registry }}/microservice:${{ github.sha }};
+            docker run -d --name microservice -p 3000:3000 ${{ steps.login-ecr.outputs.registry }}/microservice:${{ github.sha }};
           '
