@@ -1,0 +1,88 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write  # for OIDC AWS authentication
+  contents: read   # to checkout code
+
+jobs:
+  ci_cd_pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # 1. Checkout
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # 2. Setup Node.js
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    # 3. Install dependencies
+    - name: Install Dependencies
+      working-directory: ./microservice-app
+      run: npm install
+
+    # 4. Snyk Source Code & Dependencies Scan
+    - name: Run Snyk Scan (Code & Dependencies)
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+        command: test
+        working-directory: ./microservice-app
+
+    # 6. Configure AWS Credentials via OIDC
+    - name: Configure AWS Credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::734228159971:role/roleforpulling
+        aws-region: us-east-1
+
+    # 7. Login to Amazon ECR
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # 8. Build Docker Image
+    - name: Build Docker Image
+      working-directory: ./microservice-app
+      run: |
+        docker build -t ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }} .
+
+    # 9. Scan Docker image (Snyk)
+    - name: Snyk Docker Image Scan
+      uses: snyk/actions/docker@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        image: "${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }}"
+        args: --severity-threshold=high
+
+    # 10. Push Image to ECR
+    - name: Push Docker Image to ECR
+      run: |
+        docker push ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }}
+
+    # 13. Update EC2 Instance with New Docker Image
+    - name: Update EC2 to use Latest Docker Image
+      run: |
+        aws ssm send-command \
+          --instance-ids i-08cca901b2fa9b914 \
+          --document-name "AWS-RunShellScript" \
+          --comment "Pull latest Docker image & restart" \
+          --parameters commands='
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }};
+            docker stop microservice || true;
+            docker rm microservice || true;
+            docker pull ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }};
+            docker run -d --name microservice -p 3000:3000 ${{ steps.login-ecr.outputs.registry }}/microservice-app:${{ github.sha }};
+          '
