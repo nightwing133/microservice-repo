@@ -32,13 +32,11 @@ jobs:
 
     # 4. Snyk Source Code & Dependencies Scan
     - name: Run Snyk Scan (Code & Dependencies)
-      uses: snyk/actions/node@master
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: --severity-threshold=high
-        command: test
-        working-directory: ./microservice-app
+      run: |
+        cd ./microservice-app
+        npx snyk test --severity-threshold=high
 
     # 6. Configure AWS Credentials via OIDC
     - name: Configure AWS Credentials (OIDC)
