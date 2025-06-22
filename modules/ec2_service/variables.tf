@@ -24,3 +24,9 @@ variable "vpc_id" {
   type        = string
   description = "VPC ID for EC2 resources"
 }
+
+variable "sandy" {
+  type        = string
+  description = "random varaible testing"
+  default     = "sand is on the beach"
+}
